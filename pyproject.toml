@@ -1,0 +1,16 @@
+[project]
+name = "soarcast"
+version = "0.1.0"
+description = "SOAR observing run digest and Slack notifier"
+requires-python = ">=3.11"
+dependencies = [
+    "requests",
+    "astropy",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+soarcast-run = "soarcast.run_soarcast:main"
