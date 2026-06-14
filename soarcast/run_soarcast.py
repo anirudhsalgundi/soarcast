@@ -12,9 +12,8 @@ SOARCAST_WEBHOOK = os.environ.get("SOARCAST_WEBHOOK")
 
 def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # LOG_DIR = Path(__file__).parent.parent.parent / "logs"
     LOG_DIR = Path.home() / ".soarcast" / "logs"
-    LOG_DIR.mkdir(exist_ok=True)
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
         level=logging.INFO,
         format="[%(levelname)s at %(asctime)s] — %(message)s",
