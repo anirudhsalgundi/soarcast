@@ -26,7 +26,7 @@ def main():
     try:
         relevant_runs = get_relevant_runs()
         digest = build_digest(relevant_runs)
-        send_slack_digest(digest)
+        send_soarcast_digest(digest)
     except Exception as e:
         logging.error(f"SOARcast failed: {e}")
         send_slack_failure(e, SOARCAST_WEBHOOK)
