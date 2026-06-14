@@ -2,15 +2,18 @@
 # Running as a cronjob with the keys in a private repo
 
 from soarcast.nightplan import get_relevant_runs, build_digest
-from soarcast.notify import send_slack_digest
+from soarcast.notify import send_soarcast_digest, send_slack_failure
 import logging
 from datetime import datetime
 from pathlib import Path
+import os
+SOARCAST_WEBHOOK = os.environ.get("SOARCAST_WEBHOOK")
 
-print("SOARcast starting...")
+
 def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    LOG_DIR = Path(__file__).parent.parent.parent / "logs"
+    # LOG_DIR = Path(__file__).parent.parent.parent / "logs"
+    LOG_DIR = Path.home() / ".soarcast" / "logs"
     LOG_DIR.mkdir(exist_ok=True)
     logging.basicConfig(
         level=logging.INFO,
