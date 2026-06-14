@@ -27,7 +27,7 @@ def main():
         send_slack_digest(digest)
     except Exception as e:
         logging.error(f"SOARcast failed: {e}")
-        send_slack_failure(e)
+        send_slack_failure(e, SOARCAST_WEBHOOK)
 
 if __name__ == "__main__":
     main()
