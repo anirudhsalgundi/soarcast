@@ -267,52 +267,5 @@ def main():
     aeon_reminder = get_aeon_reminder(requestgroups, aeon_nights)
     return build_lco_digest(changes, aeon_reminder)
 
-
-# def main():
-#     return None
-    # # test run
-    # proposals = get_active_proposals()
-    # requestgroups = get_all_requestgroups(proposals)
-    # snapshot = load_snapshot()
-    # changes = detect_changes(requestgroups, snapshot)
-    # save_snapshot(requestgroups)
-
-    # print(f"\n--- CHANGES ---")
-    # print(f"New: {len(changes['new'])}")
-    # print(f"Changed: {len(changes['changed'])}")
-    # for c in changes["changed"]:
-    #     print(f"  {c['requestgroup']['name']} | {c['old_state']} → {c['new_state']}")
-
-    # aeon_nights = load_aeon_nights("/Users/ani/work/projects/soar/soarcast/aeon_nights.csv")
-    # aeon_reminder = get_aeon_reminder(requestgroups, aeon_nights)
-    # digest = build_lco_digest(changes, aeon_reminder)
-    # # digest = build_lco_digest(changes, None)  # no aeon reminder for now
-    # print(f"\n--- DIGEST ---")
-    # print(json.dumps({k: v for k, v in digest.items() if k != "changes"}, indent=2))
-    # print(f"\n--- CHANGES DETAIL ---")
-    # if not changes["new"] and not changes["changed"]:
-    #     print("No changes detected.")
-    # else:
-    #     if changes["new"]:
-    #         print(f"\nNEW ({len(changes['new'])}):")
-    #         for rg in changes["new"]:
-    #             print(f"  {rg['name']} | {rg['proposal']} | {rg['state']} | submitted by {rg['submitter']} | created {rg['created'][:10]}")
-        
-    #     if changes["changed"]:
-    #         print(f"\nCHANGED ({len(changes['changed'])}):")
-    #         for c in changes["changed"]:
-    #             rg = c["requestgroup"]
-    #             print(f"  {rg['name']} | {rg['proposal']} | {c['old_state']} → {c['new_state']} | submitted by {rg['submitter']}")
-
-    # print(f"\n--- AEON REMINDER ---")
-    # if not digest["has_aeon"]:
-    #     print("No upcoming AEON nights within 1.5 JD.")
-    # else:
-    #     a = digest["aeon_reminder"]
-    #     print(f"AEON Night: {a['date']} in {a['dt']:.2f} JD | {a['obs_type']} | Reducer: {a['reducer']}")
-    #     print(f"Pending targets ({len(a['pending_targets'])}):")
-    #     for rg in a["pending_targets"]:
-    #         print(f"  {rg['name']} | {rg['proposal']} | submitted by {rg['submitter']} | window: {rg['requests'][0]['windows'][0]['start'][:10]} → {rg['requests'][0]['windows'][0]['end'][:10]}")
-
 if __name__ == "__main__":
     main()
