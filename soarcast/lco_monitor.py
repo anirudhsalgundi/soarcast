@@ -1,30 +1,27 @@
-import os
 import json
-import csv
 import logging
 import urllib.parse
-from datetime import date, datetime, timedelta
-from pathlib import Path
+from datetime import date, timedelta
 
 import requests
 from astropy.time import Time
 
-# constants
-LCO_TOKEN = os.environ.get("LCO_TOKEN")
-LCO_BASE = "https://observe.lco.global"
-SNAPSHOT_PATH = Path.home() / ".soarcast" / "lco_state.json"
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
+from soarcast.constants import Constants
+from soarcast.sheets import load_aeon_nights
 
-if not LCO_TOKEN:
+logger = logging.getLogger(__name__)
+
+if not Constants.LCO_TOKEN:
     logger.error("LCO_TOKEN environment variable is not set.")
 
+
 def lco_api(endpoint, params=None):
-    headers = {"Authorization": f"Token {LCO_TOKEN}"}
-    url = urllib.parse.urljoin(LCO_BASE, endpoint)
+    headers = {"Authorization": f"Token {Constants.LCO_TOKEN}"}
+    url = urllib.parse.urljoin(Constants.LCO_BASE, endpoint)
     response = requests.get(url, headers=headers, params=params)
     response.raise_for_status()
     return response.json()
+
 
 def get_active_proposals() -> list:
     """
@@ -47,7 +44,6 @@ def get_active_proposals() -> list:
         logger.info(f"Found {len(active)} active proposals: {active}")
 
     return active
-
 
 
 def get_all_requestgroups(proposals: list) -> list:
@@ -81,17 +77,17 @@ def load_snapshot() -> dict:
     - Returns a dict mapping requestgroup ID to state (e.g. {2535060: "PENDING"})
     - If no snapshot file found, returns an empty dict (first run)
     """
-    if not SNAPSHOT_PATH.exists():
+    if not Constants.LCO_SNAPSHOT_PATH.exists():
         logger.info("No snapshot file found. This is likely the first run.")
         return {}
 
     try:
-        with open(SNAPSHOT_PATH, "r") as f:
+        with open(Constants.LCO_SNAPSHOT_PATH, "r") as f:
             snapshot = json.load(f)
-        logger.info(f"Loaded snapshot with {len(snapshot)} requestgroups from {SNAPSHOT_PATH}")
+        logger.info(f"Loaded snapshot with {len(snapshot)} requestgroups from {Constants.LCO_SNAPSHOT_PATH}")
         return snapshot
     except Exception as e:
-        logger.error(f"Failed to load snapshot from {SNAPSHOT_PATH}: {e}")
+        logger.error(f"Failed to load snapshot from {Constants.LCO_SNAPSHOT_PATH}: {e}")
         return {}
 
 
@@ -102,15 +98,15 @@ def save_snapshot(requestgroups: list) -> None:
     - Saves a dict mapping requestgroup ID to state
     - Creates the snapshot directory if it doesn't exist
     """
-    SNAPSHOT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    Constants.LCO_SNAPSHOT_PATH.parent.mkdir(parents=True, exist_ok=True)
     snapshot = {str(rg["id"]): rg["state"] for rg in requestgroups}
 
     try:
-        with open(SNAPSHOT_PATH, "w") as f:
+        with open(Constants.LCO_SNAPSHOT_PATH, "w") as f:
             json.dump(snapshot, f, indent=2)
-        logger.info(f"Saved snapshot with {len(snapshot)} requestgroups to {SNAPSHOT_PATH}")
+        logger.info(f"Saved snapshot with {len(snapshot)} requestgroups to {Constants.LCO_SNAPSHOT_PATH}")
     except Exception as e:
-        logger.error(f"Failed to save snapshot to {SNAPSHOT_PATH}: {e}")
+        logger.error(f"Failed to save snapshot to {Constants.LCO_SNAPSHOT_PATH}: {e}")
 
 
 def detect_changes(requestgroups: list, snapshot: dict) -> dict:
@@ -145,67 +141,38 @@ def detect_changes(requestgroups: list, snapshot: dict) -> dict:
     return {"new": new, "changed": changed}
 
 
-def load_aeon_nights(csv_path: str) -> list:
+def get_aeon_reminder(requestgroups: list, aeon_nights: list | None = None) -> dict | None:
     """
-    Load AEON observing nights from a CSV file.
-    - csv_path: path to the CSV file with columns: date, obs_type, reducer
-    - Returns a list of dicts with keys: date, obs_type, reducer
-    - If file not found or malformed, returns an empty list
-    """
-    csv_path = Path(csv_path)
-
-    if not csv_path.exists():
-        logger.error(f"AEON nights CSV file not found at {csv_path}")
-        return []
-
-    nights = []
-    try:
-        with open(csv_path, "r") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                nights.append({
-                    "date": row["date"].strip(),
-                    "obs_type": row["obs_type"].strip(),
-                    "reducer": row["reducer"].strip(),
-                })
-        logger.info(f"Loaded {len(nights)} AEON nights from {csv_path}")
-    except Exception as e:
-        logger.error(f"Failed to load AEON nights from {csv_path}: {e}")
-        return []
-
-    return nights
-
-
-def get_aeon_reminder(requestgroups: list, aeon_nights: list) -> dict | None:
-    """
-    Check if there is an upcoming AEON night within 1.5 JD and return pending targets for it.
+    Check if there is an AEON night within the next 1 day (or currently underway)
+    and return pending targets for it.
     - requestgroups: flat list of requestgroup dicts as returned by get_all_requestgroups()
-    - aeon_nights: list of dicts as returned by load_aeon_nights()
-    - Returns a dict with keys: date, obs_type, reducer, dt, pending_targets
-    - If no upcoming AEON night found within 1.5 JD, returns None
+    - aeon_nights: list of dicts as returned by sheets.load_aeon_nights(); fetched if not given
+    - Returns a dict with keys: date, obs_type, reducer, dt, started, pending_targets
+    - If no AEON night found within the next 1 day, returns None
     """
+    if aeon_nights is None:
+        aeon_nights = load_aeon_nights()
+
     now_jd = Time.now().jd
-    logger.info("Checking for upcoming AEON nights within 1.5 JD...")
+    logger.info("Checking for AEON nights within the next 1 day...")
 
     for night in sorted(aeon_nights, key=lambda n: n["date"]):
         night_date = date.fromisoformat(night["date"])
-        if night_date < date.today():
+        night_start_jd = Time(f"{night['date']}T19:00:00", format="isot", scale="utc").jd
+        night_end_jd = Time(f"{(night_date + timedelta(days=1)).isoformat()}T12:00:00", format="isot", scale="utc").jd
+        dt = night_start_jd - now_jd
+
+        if now_jd > night_end_jd:
+            # night is fully over, ignore
             continue
 
-        night_jd = Time(f"{night['date']}T19:00:00", format="isot", scale="utc").jd
-        dt = night_jd - now_jd
-
-        if dt < -0.75:
-            logger.info(f"Skipping past AEON night {night['date']} (JD {night_jd:.2f}, dt {dt:.2f})")
-            continue
-
-        if dt > 1.5:
+        if dt > 1.0:
             logger.info(f"Next AEON night {night['date']} is {dt:.2f} JD away — too far.")
             break
 
-        logger.info(f"Upcoming AEON night found: {night['date']} in {dt:.2f} JD")
+        started = now_jd >= night_start_jd
+        logger.info(f"AEON night in range: {night['date']} (dt={dt:.2f} JD, started={started})")
 
-        # filter pending requestgroups whose window overlaps with the AEON night
         pending = []
         for rg in requestgroups:
             if rg["state"] != "PENDING":
@@ -213,9 +180,9 @@ def get_aeon_reminder(requestgroups: list, aeon_nights: list) -> dict | None:
             try:
                 window_start = rg["requests"][0]["windows"][0]["start"]
                 window_end = rg["requests"][0]["windows"][0]["end"]
-                night_start = f"{night['date']}T19:00:00Z"
-                night_end = f"{night['date']}T23:59:59Z"
-                if window_start <= night_end and window_end >= night_start:
+                night_start_s = f"{night['date']}T19:00:00Z"
+                night_end_s = f"{(night_date + timedelta(days=1)).isoformat()}T12:00:00Z"
+                if window_start <= night_end_s and window_end >= night_start_s:
                     pending.append(rg)
             except (KeyError, IndexError):
                 continue
@@ -227,10 +194,11 @@ def get_aeon_reminder(requestgroups: list, aeon_nights: list) -> dict | None:
             "obs_type": night["obs_type"],
             "reducer": night["reducer"],
             "dt": dt,
+            "started": started,
             "pending_targets": pending,
         }
 
-    logger.info("No upcoming AEON nights found within 1.5 JD.")
+    logger.info("No AEON nights found within next 1 day.")
     return None
 
 
@@ -243,7 +211,7 @@ def build_lco_digest(changes: dict, aeon_reminder: dict | None) -> dict:
         - "changes": the changes dict
         - "aeon_reminder": the aeon_reminder dict or None
         - "has_changes": bool, True if there are any new or changed requestgroups
-        - "has_aeon": bool, True if there is an upcoming AEON night
+        - "has_aeon": bool, True if there is an AEON night within the next day
     """
     has_changes = bool(changes["new"] or changes["changed"])
     has_aeon = aeon_reminder is not None
@@ -257,15 +225,17 @@ def build_lco_digest(changes: dict, aeon_reminder: dict | None) -> dict:
         "has_aeon": has_aeon,
     }
 
+
 def main():
     proposals = get_active_proposals()
     requestgroups = get_all_requestgroups(proposals)
     snapshot = load_snapshot()
     changes = detect_changes(requestgroups, snapshot)
     save_snapshot(requestgroups)
-    aeon_nights = load_aeon_nights("/Users/ani/work/projects/soar/soarcast/aeon_nights.csv")
+    aeon_nights = load_aeon_nights()
     aeon_reminder = get_aeon_reminder(requestgroups, aeon_nights)
     return build_lco_digest(changes, aeon_reminder)
+
 
 if __name__ == "__main__":
     main()

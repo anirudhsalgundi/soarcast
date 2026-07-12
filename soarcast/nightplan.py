@@ -1,4 +1,3 @@
-import os
 import logging
 import urllib.parse
 from datetime import date, datetime, timedelta
@@ -6,13 +5,14 @@ from datetime import date, datetime, timedelta
 import requests
 from astropy.time import Time
 
+from soarcast.constants import Constants
 
 #CONSTANTS
-FRITZ_TOKEN = os.environ.get("FRITZ_FOLLOWUP_REQ_TOKEN")
-LCO_TOKEN = os.environ.get("LCO_TOKEN")
-FRITZ_BASE = "https://fritz.science"
-LCO_BASE = "https://observe.lco.global"
-SOAR_INSTRUMENT_IDS = {1107, 1108, 1109}
+FRITZ_TOKEN = Constants.FRITZ_TOKEN
+LCO_TOKEN = Constants.LCO_TOKEN
+FRITZ_BASE = Constants.FRITZ_BASE
+LCO_BASE = Constants.LCO_BASE
+SOAR_INSTRUMENT_IDS = Constants.SOAR_INSTRUMENT_IDS
 logger = logging.getLogger(__name__) # simpler logging setup
 
 
