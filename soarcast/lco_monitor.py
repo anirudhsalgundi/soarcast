@@ -1,7 +1,8 @@
 import json
 import logging
 import urllib.parse
-from datetime import date, timedelta
+from pytz import timezone
+from datetime import date, datetime, timedelta
 
 import requests
 from astropy.time import Time
@@ -141,6 +142,9 @@ def detect_changes(requestgroups: list, snapshot: dict) -> dict:
     return {"new": new, "changed": changed}
 
 
+from pytz import timezone
+from datetime import datetime
+
 def get_aeon_reminder(requestgroups: list, aeon_nights: list | None = None) -> dict | None:
     """
     Check if there is an AEON night within the next 1 day (or currently underway)
@@ -153,13 +157,24 @@ def get_aeon_reminder(requestgroups: list, aeon_nights: list | None = None) -> d
     if aeon_nights is None:
         aeon_nights = load_aeon_nights()
 
-    now_jd = Time.now().jd
-    logger.info("Checking for AEON nights within the next 1 day...")
+    now = datetime.utcnow()
+    chile_tz = timezone("America/Santiago")
+    now_chile = now.astimezone(chile_tz)
+    now_jd = Time(now).jd
+
+    logger.info("Checking for AEON nights within the next 1.5 days...")
 
     for night in sorted(aeon_nights, key=lambda n: n["date"]):
         night_date = date.fromisoformat(night["date"])
-        night_start_jd = Time(f"{night['date']}T19:00:00", format="isot", scale="utc").jd
-        night_end_jd = Time(f"{(night_date + timedelta(days=1)).isoformat()}T12:00:00", format="isot", scale="utc").jd
+        night_start_chile = chile_tz.localize(datetime.combine(night_date, datetime.min.time())).replace(hour=15)  # 3 PM Chile time
+        night_end_chile = night_start_chile + timedelta(hours=16)  # Ends at 7 AM next day Chile time
+
+        # Convert to UTC for Julian Date calculations
+        night_start_utc = night_start_chile.astimezone(timezone("UTC"))
+        night_end_utc = night_end_chile.astimezone(timezone("UTC"))
+
+        night_start_jd = Time(night_start_utc).jd
+        night_end_jd = Time(night_end_utc).jd
         dt = night_start_jd - now_jd
 
         if now_jd > night_end_jd:
@@ -180,9 +195,7 @@ def get_aeon_reminder(requestgroups: list, aeon_nights: list | None = None) -> d
             try:
                 window_start = rg["requests"][0]["windows"][0]["start"]
                 window_end = rg["requests"][0]["windows"][0]["end"]
-                night_start_s = f"{night['date']}T19:00:00Z"
-                night_end_s = f"{(night_date + timedelta(days=1)).isoformat()}T12:00:00Z"
-                if window_start <= night_end_s and window_end >= night_start_s:
+                if window_start <= night_end_utc.isoformat() and window_end >= night_start_utc.isoformat():
                     pending.append(rg)
             except (KeyError, IndexError):
                 continue
@@ -198,7 +211,7 @@ def get_aeon_reminder(requestgroups: list, aeon_nights: list | None = None) -> d
             "pending_targets": pending,
         }
 
-    logger.info("No AEON nights found within next 1 day.")
+    logger.info("No AEON nights found within next 1.5 days.")
     return None
 
 
