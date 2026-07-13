@@ -456,8 +456,8 @@ def send_slack_failure(error: Exception, webhook: str) -> None:
     if response.status_code == 200:
         logger.info("Failure alert sent to Slack successfully.")
     else:
-        logger.error(f"Failed to send failure alert to Slack. Status: {response.status_code} | {response.text}")
-
+        logger.error(f"Failed to send failure alert to Slack. Status: {response.status_code}")
+        logger.debug(f"Response text: {response.text}")
 
 def main():
     lco_digest = get_lco_digest()
